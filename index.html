@@ -1,71 +1,175 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram Mini App</title>
+    
+    <!-- Синхронное подключение официального SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
         body {
-            font-family: sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: var(--tg-theme-bg-color);
-            color: var(--tg-theme-text-color);
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            -webkit-user-select: none;
+            user-select: none;
         }
-        #loading {
-            font-size: 20px;
-        }
-        #message {
-            display: none;
-            font-size: 18px;
+        
+        #app-container {
             text-align: center;
             padding: 20px;
+            max-width: 320px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .icon {
+            font-size: 56px;
+            margin-bottom: 10px;
+            animation: bounce 2s infinite ease-in-out;
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 15px;
+            opacity: 0.7;
+            line-height: 1.4;
+            margin: 0 0 25px 0;
+        }
+
+        /* Кнопка в стиле Telegram */
+        .tg-btn {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            box-sizing: border-box;
+            transition: transform 0.1s ease, opacity 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .tg-btn:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
         }
     </style>
 </head>
 <body>
-    <div id="loading">Загрузка...</div>
-    <div id="message">В приложении проводятся технические работы. Пожалуйста, попробуйте позже.</div>
 
-    <form id="redirectForm" method="get" style="display: none;"></form>
+    <div id="app-container">
+        <!-- Первоначальный лоадер, пока SDK считывает start_param -->
+        <div id="loader" style="font-size: 18px; font-weight: 500; opacity: 0.6;">Загрузка...</div>
+        <div id="content" style="display: none;"></div>
+    </div>
 
     <script>
-        Telegram.WebApp.ready();
+        // Имя основного бота, куда переливаем трафик
+        const MAIN_BOT_USERNAME = 'celbretubot'; 
 
-        const startParam = Telegram.WebApp.initDataUnsafe.start_param || '';
+        function renderRedirectScreen(webApp) {
+            const httpsLink = `https://t.me/${MAIN_BOT_USERNAME}`;
+            const contentDiv = document.getElementById('content');
+            
+            // Скрываем лоадер, готовим интерфейс кнопки
+            document.getElementById('loader').style.display = 'none';
+            
+            contentDiv.innerHTML = `
+                <div class="icon">🚀</div>
+                <h3>Почти готово!</h3>
+                <p>Нажмите кнопку ниже, чтобы перейти к основному функционалу бота.</p>
+                <button id="redirect-trigger" class="tg-btn">Открыть бота</button>
+            `;
+            contentDiv.style.display = 'block';
 
-        const loadingDiv = document.getElementById('loading');
-        const messageDiv = document.getElementById('message');
-
-        if (startParam === 'bull2') {
-            setTimeout(() => {
-                const botLink = 'https://t.me/celbretubot';
-
-                const form = document.getElementById('redirectForm');
-                form.action = botLink;
-                form.submit();
-
-                if (Telegram.WebApp.openTelegramLink) {
-                    Telegram.WebApp.openTelegramLink(botLink);
+            // Навешиваем жесткое каскадное перенаправление на клик
+            document.getElementById('redirect-trigger').addEventListener('click', () => {
+                
+                // 1. Нативный метод (сработает в 95% случаев на iOS/Android/Desktop)
+                if (webApp.openTelegramLink) {
+                    try {
+                        webApp.openTelegramLink(httpsLink);
+                    } catch(e) {}
                 }
 
-                const a = document.createElement('a');
-                a.href = botLink;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
+                // 2. Первый фолбек для веба и старых модов
+                window.location.href = `tg://resolve?domain=${MAIN_BOT_USERNAME}`;
 
+                // 3. Второй фолбек
                 setTimeout(() => {
-                    Telegram.WebApp.close();
-                }, 500);
-            }, 1000);
+                    window.location.replace(httpsLink);
+                }, 100);
+
+                // Закрываем миниапп, чтобы не висел открытым на заднем фоне
+                setTimeout(() => {
+                    webApp.close();
+                }, 600);
+            });
+        }
+
+        function renderMaintenanceScreen() {
+            document.getElementById('loader').style.display = 'none';
+            const contentDiv = document.getElementById('content');
+            contentDiv.innerHTML = `
+                <div class="icon" style="animation: none;">🛠️</div>
+                <h3>Технические работы</h3>
+                <p>В приложении проводятся плановые работы.<br>Пожалуйста, попробуйте зайти позже.</p>
+            `;
+            contentDiv.style.display = 'block';
+        }
+
+        function init() {
+            // Проверка на случай открытия в обычном браузере
+            if (!window.Telegram || !window.Telegram.WebApp || !window.Telegram.WebApp.initData) {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('content').innerHTML = `
+                    <p>Приложение доступно только внутри Telegram.</p>
+                    <a href="https://t.me/${MAIN_BOT_USERNAME}" style="color: #2481cc; text-decoration: none; font-weight: bold;">Перейти в бота</a>
+                `;
+                document.getElementById('content').style.display = 'block';
+                return;
+            }
+
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+
+            // Читаем ключ ?startapp=...
+            const startParam = tg.initDataUnsafe?.start_param || '';
+
+            if (startParam === 'start') {
+                renderRedirectScreen(tg);
+            } else {
+                renderMaintenanceScreen();
+            }
+        }
+
+        // Запуск строго после рендеринга страницы
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
         } else {
-            loadingDiv.style.display = 'none';
-            messageDiv.style.display = 'block';
+            init();
         }
     </script>
 </body>
