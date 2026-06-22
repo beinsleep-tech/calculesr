@@ -2,9 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram Mini App</title>
     
+    <!-- Подключаем официальный скрипт Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
@@ -17,11 +18,19 @@
             margin: 0;
             background-color: var(--tg-theme-bg-color, #ffffff);
             color: var(--tg-theme-text-color, #000000);
-            -webkit-user-select: none;
-            user-select: none;
+            overflow: hidden;
         }
-        
-        #app-container {
+
+        #loading {
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+
+        #app-content {
+            display: none; /* Скрыто до полной загрузки Telegram SDK */
+            flex-direction: column;
+            align-items: center;
             text-align: center;
             padding: 20px;
             max-width: 320px;
@@ -29,158 +38,114 @@
             box-sizing: border-box;
         }
 
-        .icon {
-            font-size: 56px;
-            margin-bottom: 10px;
-            animation: bounce 2s infinite ease-in-out;
-        }
-
-        h3 {
-            margin: 0 0 15px 0;
-            font-size: 20px;
-            font-weight: 600;
+        .headline {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
             line-height: 1.3;
         }
 
-        p {
-            font-size: 14px;
-            opacity: 0.7;
+        .description {
+            font-size: 16px;
+            color: var(--tg-theme-hint-color, #707579);
+            margin-bottom: 32px;
             line-height: 1.4;
-            margin: 0 0 12px 0;
         }
 
-        /* Кнопка в стиле Telegram */
-        .tg-btn {
-            background-color: var(--tg-theme-button-color, #2481cc);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border: none;
-            padding: 14px 20px;
-            border-radius: 12px;
+        .action-button {
+            display: block;
+            width: 100%;
+            padding: 15px 20px;
             font-size: 16px;
             font-weight: 600;
-            width: 100%;
+            border: none;
+            border-radius: 12px;
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
             cursor: pointer;
-            box-sizing: border-box;
-            transition: transform 0.1s ease, opacity 0.2s ease;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            margin-top: 15px;
+            transition: transform 0.1s ease, opacity 0.1s ease;
         }
 
-        .tg-btn:active {
+        .action-button:active {
             transform: scale(0.98);
             opacity: 0.9;
         }
 
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
+        .agreement-text {
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--tg-theme-hint-color, #999999);
+            margin-top: 16px;
+            padding: 0 10px;
         }
     </style>
 </head>
 <body>
 
-    <div id="app-container">
-        <div id="loader" style="font-size: 18px; font-weight: 500; opacity: 0.6;">Загрузка...</div>
-        <div id="content" style="display: none;"></div>
+    <!-- Экран загрузки -->
+    <div id="loading">Загрузка...</div>
+
+    <!-- Главный экран приложения -->
+    <div id="app-content">
+        <div class="headline">Добро пожаловать!</div>
+        <div class="description">Нажмите кнопку ниже, чтобы перейти в главное меню бота и открыть все доступные функции.</div>
+        
+        <button class="action-button" id="redirect-btn">Запустить бота</button>
+        
+        <div class="agreement-text">
+            Нажимая кнопку, вы соглашаетесь с правилами бота и площадки Telegram.
+        </div>
     </div>
 
     <script>
-        // Имя основного бота, куда переливаем трафик
-        const MAIN_BOT_USERNAME = 'celbretubot'; 
+        const BOT_USERNAME = 'paitt';
+        const TARGET_LINK = `https://t.me/${BOT_USERNAME}`;
 
-        // Универсальная функция редиректа (используется и авто, и по клику)
-        function doRedirect(webApp) {
-            const httpsLink = `https://t.me/${MAIN_BOT_USERNAME}`;
-            
-            // 1. Нативный метод из современной документации (основной приоритет)
-            if (webApp.openTelegramLink) {
-                try {
-                    webApp.openTelegramLink(httpsLink);
-                } catch(e) {
-                    console.error("Native openTelegramLink failed");
+        function initMiniApp() {
+            let attempts = 0;
+            const maxAttempts = 20;
+
+            const checkSDK = setInterval(() => {
+                attempts++;
+
+                if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+                    clearInterval(checkSDK);
+                    
+                    const webApp = Telegram.WebApp;
+                    webApp.ready();
+                    webApp.expand();
+
+                    // Скрываем лоадер, показываем интерфейс
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('app-content').style.display = 'flex';
+
+                    // Вешаем безопасное событие на клик по кнопке
+                    document.getElementById('redirect-btn').addEventListener('click', () => {
+                        if (webApp.openTelegramLink) {
+                            // Официальный и самый безопасный метод редиректа внутри Telegram
+                            webApp.openTelegramLink(TARGET_LINK);
+                        } else {
+                            // Фолбэк на случай открытия в обычном браузере
+                            window.open(TARGET_LINK, '_blank');
+                        }
+                    });
+
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(checkSDK);
+                    // Если зашли совсем не из Telegram
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('app-content').style.display = 'flex';
+                    
+                    document.getElementById('redirect-btn').addEventListener('click', () => {
+                        window.open(TARGET_LINK, '_blank');
+                    });
                 }
-            }
-
-            // 2. Первый фолбек (deep-link для десктопов и некоторых модов)
-            window.location.href = `tg://resolve?domain=${MAIN_BOT_USERNAME}`;
-
-            // 3. Второй фолбек (прямой редирект внутри WebView)
-            setTimeout(() => {
-                window.location.replace(httpsLink);
-            }, 100);
+            }, 50);
         }
 
-        function renderRedirectScreen(webApp) {
-            document.getElementById('loader').style.display = 'none';
-            const contentDiv = document.getElementById('content');
-            
-            contentDiv.innerHTML = `
-                <div class="icon">🐱</div>
-                <h3>Нажмите кнопку ниже, чтобы перейти к основному боту.</h3>
-                <p>Нам можно доверять!</p>
-                <p>Все абсолютно анонимно, безопасно, без лишних действий.</p>
-                <button id="redirect-trigger" class="tg-btn">Открыть бота</button>
-            `;
-            contentDiv.style.display = 'block';
-
-            // Ручной клик-страховка
-            document.getElementById('redirect-trigger').addEventListener('click', () => {
-                doRedirect(webApp);
-                // Если юзер нажал сам, закрываем чуть быстрее (через 1.5 секунды), чтобы не мозолить глаза
-                setTimeout(() => { webApp.close(); }, 1500);
-            });
-
-            // 🔥 АВТО-РЕДИРЕКТ: Срабатывает сразу при рендере экрана
-            doRedirect(webApp);
-
-            // ⏱️ Твой таймаут: Закрываем Mini App строго через 15 секунд, если авто-редирект завис
-            setTimeout(() => {
-                webApp.close();
-            }, 15000);
-        }
-
-        function renderMaintenanceScreen() {
-            document.getElementById('loader').style.display = 'none';
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = `
-                <div class="icon" style="animation: none;">🛠️</div>
-                <h3>Технические работы</h3>
-                <p>В приложении проводятся плановые работы.<br>Пожалуйста, попробуйте зайти позже.</p>
-            `;
-            contentDiv.style.display = 'block';
-        }
-
-        function init() {
-            // Фолбек на случай открытия в обычном браузере вне TG
-            if (!window.Telegram || !window.Telegram.WebApp || !window.Telegram.WebApp.initData) {
-                document.getElementById('loader').style.display = 'none';
-                document.getElementById('content').innerHTML = `
-                    <p>Приложение доступно только внутри Telegram.</p>
-                    <a href="https://t.me/${MAIN_BOT_USERNAME}" style="color: var(--tg-theme-link-color, #2481cc); text-decoration: none; font-weight: bold;">Перейти в бота</a>
-                `;
-                document.getElementById('content').style.display = 'block';
-                return;
-            }
-
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
-
-            const startParam = tg.initDataUnsafe?.start_param || '';
-
-            if (startParam === 'start') {
-                renderRedirectScreen(tg);
-            } else {
-                renderMaintenanceScreen();
-            }
-        }
-
-        // Корректный запуск по готовности DOM
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
-        }
+        // Запуск при полной загрузке страницы
+        window.addEventListener('DOMContentLoaded', initMiniApp);
     </script>
 </body>
 </html>
